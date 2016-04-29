@@ -1,0 +1,101 @@
+<div class="col-md-6 col-sm-6 col-xs-12">
+	<div class="x_panel tile">
+		<div class="x_title">
+			<h2>Their main tongue</h2>
+			<ul class="nav navbar-right panel_toolbox">
+				<li><a class="collapse-link"><i class="fa fa-chevron-up"></i></a>
+				</li>
+				<li class="dropdown">
+					<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false"><i class="fa fa-wrench"></i></a>
+					<ul class="dropdown-menu" role="menu">
+						<li><a href="#">Settings 1</a>
+						</li>
+						<li><a href="#">Settings 2</a>
+						</li>
+					</ul>
+				</li>
+				<li><a class="close-link"><i class="fa fa-close"></i></a>
+				</li>
+			</ul>
+			<div class="clearfix"></div>
+		</div>
+		<div class="x_content">
+			<!-- dashbord linegraph -->
+			<script>
+				/*
+				$(document).ready(function(){
+					Chart.defaults.global.legend = {
+						enabled: false
+					};
+			
+					var data = {
+						labels: {{item-label-list}},
+						datasets: [{
+							data: {{item-value-list}},
+							backgroundColor: {{item-color-list}},
+							hoverBackgroundColor: {{item-color-list}}
+						}]
+					};
+			
+					var canvasDoughnut = new Chart(document.getElementById("canvas-donut"), {
+						type: 'doughnut',
+						tooltipFillColor: "rgba(51, 51, 51, 0.55)",
+						data: data
+					});
+				});
+				*/
+				$(function () {
+					
+				
+				    // Build the chart
+				    $('#div-donut').highcharts({
+				        chart: {
+				            plotBackgroundColor: null,
+				            plotBorderWidth: null,
+				            plotShadow: false,
+				            type: 'pie'
+				        },
+				        title: {
+				            text: '{{donut-title}}'
+				        },
+				        tooltip: {
+					        headerFormat: '',
+				            pointFormat: '{point.name}: <b>{point.y} ({point.percentage:.1f}%)</b>'
+				            /*pointFormatter: function(){
+					            n = this.name.toLowerCase();
+					            str = '<img style="margin-right:3px;display:inline-block;" src="/static/img/flags/lang/'+this.name+'.png">: <b>'+this.y+' ('+this.percentage.toFixed(2)+'%)</b>';
+					            console.log(this.name);
+					            return this.name;
+					        }*/
+				        },
+				        plotOptions: {
+				            pie: {
+				                allowPointSelect: true,
+				                cursor: 'pointer',
+				                dataLabels: {
+				                    enabled: true,
+				                    format: '<b>{point.name}</b>: {point.percentage:.1f} %',
+				                    style: {
+				                        color: (Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black'
+				                    },
+				                    connectorColor: 'silver'
+				                }
+				            }
+				        },
+				        series: [{
+				            name: 'Languages',
+				            data: [
+				                {{donut-data}}
+				            ]
+				        }]
+				    });
+				});
+				
+				
+			</script>
+			<div id="div-donut">
+				<canvas id="canvas-donut" height="140" width="140" style="margin: 15px 10px 10px 0"></canvas>
+			</div>
+		</div>
+	</div>
+</div>
