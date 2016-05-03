@@ -1,0 +1,35 @@
+<div class="btn-group" style="z-index:2000;">
+	<button class="btn btn-default btn-xs dropdown-toggle" style="padding:0 3px;" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+		Actions
+		<span class="caret"></span>
+		<span class="sr-only">Toggle Dropdown</span>
+	</button>
+	<ul class="dropdown-menu">
+		<li data-for="following">
+			<a href="/twitter/unfollow?when=now&id={{id-twittos}}" style="width:20px;display: inline-block;">
+				<span style="width:20px;display: inline-block;">
+					<i class="fa fa-remove" style="color:red!important;"></i>
+				</span>
+				<span>Unfollow now</span>
+			</a>
+		</li>
+		<li data-for="following">
+			<a href="/twitter/unfollow?when=later&id={{id-twittos}}" style="width:20px;display: inline-block;">
+				<span style="width:20px;display: inline-block;">
+					<i class="fa fa-remove" style="color:red!important;"></i><sup style="margin-left:-2px;"><i class="fa fa-clock-o" style="color:#333;"></i></sup>
+				</span>
+				<span>Unfollow later</span>
+			</a>
+		</li>
+		<li data-for="not-following">
+			<a href="/twitter/unfollow?when=now&id={{id-twittos}}">
+				<span>Follow now</span>
+			</a>
+		</li>
+		<li data-for="not-following">
+			<a href="/twitter/unfollow?when=later&id={{id-twittos}}">
+				<span>Follow later</span>
+			</a>
+		</li>
+	</ul>
+</div>

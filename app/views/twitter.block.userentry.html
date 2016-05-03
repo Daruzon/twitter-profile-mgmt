@@ -1,0 +1,65 @@
+<div class="col-md-4 col-sm-6 col-xs-12 animated fadeInDown">
+	<div class="well profile_view {{relationship-status}}" style="padding-top:0;position:relative;z-index:500;background:black;height:240px;background-image:url({{image}});background-size:cover;">
+		<!--img style="position:absolute;width:100%;z-index:0;background:black;opacity:.5;" src="{{image}}" /-->
+		<div style="position:relative;z-index:1000;color:white;padding:0;margin-top:0;padding-top:5px;background:rgba(0,0,0,.6);height:100%;overflow:hidden;">
+			<div style="position:relative;z-index:1000;">
+				<div>
+					<h2 style="text-align:center;">
+						<strong>{{username}}</strong>
+					</h2>
+					<hr/>
+					<div class="img-circle" style="height: 0;padding:0;padding-bottom: 20%;display:inline-block;float:right;width:20%;margin-right:5%;margin-left:3%;background-image:url({{image}});background-size:cover;background-position: center center;">
+						<!--img src="{{image}}" alt="" style="width:110%;margin-left:-5%"-->
+					</div>
+					<div style="margin-left:3%;">
+						<h4 class="brief" style="font-size:1.1em;color:#EEE;margin-bottom:4px;">
+							<i>@<a href="https://www.twitter.com/{{screen_name}}" target="_blank" style="color:white!important;">{{screen_name}}</a></i>
+						</h4>
+						{{buttons}}
+					</div>
+					<table style="width:99%;margin-left:1%;">
+						<tr>
+							<td>
+								<img src="/static/img/flags/lang/{{language}}.png" />
+							</td>
+							<td style="width:30%;text-align:center;">
+								<i class="fa fa-comments"></i>
+								<small style="padding-left:5px;">{{nb_tweets}}</small>
+							</td>
+							<td style="width:30%;text-align:center;">
+								<i class="fa fa-users"></i>
+								<small style="padding-left:5px;">{{nb_influencers}}</small>
+							</td>
+							<td style="width:30%;text-align:center;">
+								<i class="fa fa-feed"></i>
+								<small style="padding-left:5px;">{{nb_followers}}</small>
+							</td>
+							<td style="width:10%;text-align:center;">
+								{{external-links}}
+							</td>
+						</tr>
+					</table>
+					
+				</div>
+			</div>
+			<div style="clear:both;"></div>
+			<div style="height:100px;">
+				<p style="padding:3px;text-align:left;">
+					<small>{{description}}</small>
+				</p>
+			</div>
+			
+					
+			<table style="width:100%;">
+				<tr>
+					<td style="width:50%;text-align:center;">
+						{{current-relationships}}
+					</td>
+					<td style="width:50%;text-align:right;padding:4.5% 3%;">
+						
+					</td>
+				</tr>
+			</table>
+		</div>
+	</div>
+</div>

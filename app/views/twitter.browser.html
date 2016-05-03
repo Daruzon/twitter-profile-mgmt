@@ -24,7 +24,12 @@
 	<link rel="stylesheet" type="text/css" href="/static/css/maps/jquery-jvectormap-2.0.3.css" />
 	<link href="/static/css/icheck/flat/green.css" rel="stylesheet" />
 	<link href="/static/css/floatexamples.css" rel="stylesheet" type="text/css" />
-
+	<style>
+	a > i {transition:.3s all} a:hover > i {text-shadow:0 0 2px whitesmoke,0 0 2px whitesmoke;}
+	.profile_view {background-size:cover;background-position: center center;box-shadow: -3px -3px 20px #444 inset, 0 0 5px #333;border:5px white solid;overflow:hidden;border-radius:15px;}
+	.profile_view hr {box-shadow: 0 0 5px white;border:none;border-top:1px white solid;width:60%;margin:10px auto;clear:both;}
+	.profile_view.following [data-for=not-following], .profile_view.not-following [data-for=following] {display:none;}
+	</style>
 	<script src="/static/js/jquery.js"></script>
 	<script src="/static/js/jquery-ui.js"></script>
 	<script src="/static/js/nprogress.js"></script>
@@ -281,184 +286,14 @@
 
 			<!-- page content -->
 			<div class="right_col" role="main">
-
-				<!-- top tiles -->
-				<div class="row tile_count">
-					{{headercounter}}
-				</div>
-				<!-- /top tiles -->
-
 				<div class="row">
-					{{combined-chart-date}}
-
+					{{number-pagination}}
+					<div style="clear:both"></div>
+					{{language-pagination}}
 				</div>
-				<br />
-
+				<div style="clear:both"></div>
 				<div class="row">
-					<div class="col-md-6 col-sm-6 col-xs-12" style="-webkit-filter: grayscale(80%); filter: grayscale(80%);">
-						<div class="x_panel tile fixed_height_320">
-							<div class="x_title">
-								<h2><i>(template fragment)</i></h2>
-								<ul class="nav navbar-right panel_toolbox">
-									<li><a class="collapse-link"><i class="fa fa-chevron-up"></i></a>
-									</li>
-									<li class="dropdown">
-										<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false"><i class="fa fa-wrench"></i></a>
-										<ul class="dropdown-menu" role="menu">
-											<li><a href="#">Settings 1</a>
-											</li>
-											<li><a href="#">Settings 2</a>
-											</li>
-										</ul>
-									</li>
-									<li><a class="close-link"><i class="fa fa-close"></i></a>
-									</li>
-								</ul>
-								<div class="clearfix"></div>
-							</div>
-							<div class="x_content">
-								<h4><i>(template fragment)</i></h4>
-								<div class="widget_summary">
-									<div class="w_left w_25">
-										<span>0.1.5.2</span>
-									</div>
-									<div class="w_center w_55">
-										<div class="progress">
-											<div class="progress-bar bg-green" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 66%;">
-												<span class="sr-only">60% Complete</span>
-											</div>
-										</div>
-									</div>
-									<div class="w_right w_20">
-										<span>123k</span>
-									</div>
-									<div class="clearfix"></div>
-								</div>
-
-								<div class="widget_summary">
-									<div class="w_left w_25">
-										<span>0.1.5.3</span>
-									</div>
-									<div class="w_center w_55">
-										<div class="progress">
-											<div class="progress-bar bg-green" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 45%;">
-												<span class="sr-only">60% Complete</span>
-											</div>
-										</div>
-									</div>
-									<div class="w_right w_20">
-										<span>53k</span>
-									</div>
-									<div class="clearfix"></div>
-								</div>
-								<div class="widget_summary">
-									<div class="w_left w_25">
-										<span>0.1.5.4</span>
-									</div>
-									<div class="w_center w_55">
-										<div class="progress">
-											<div class="progress-bar bg-green" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 25%;">
-												<span class="sr-only">60% Complete</span>
-											</div>
-										</div>
-									</div>
-									<div class="w_right w_20">
-										<span>23k</span>
-									</div>
-									<div class="clearfix"></div>
-								</div>
-								<div class="widget_summary">
-									<div class="w_left w_25">
-										<span>0.1.5.5</span>
-									</div>
-									<div class="w_center w_55">
-										<div class="progress">
-											<div class="progress-bar bg-green" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 5%;">
-												<span class="sr-only">60% Complete</span>
-											</div>
-										</div>
-									</div>
-									<div class="w_right w_20">
-										<span>3k</span>
-									</div>
-									<div class="clearfix"></div>
-								</div>
-								<div class="widget_summary">
-									<div class="w_left w_25">
-										<span>0.1.5.6</span>
-									</div>
-									<div class="w_center w_55">
-										<div class="progress">
-											<div class="progress-bar bg-green" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 2%;">
-												<span class="sr-only">60% Complete</span>
-											</div>
-										</div>
-									</div>
-									<div class="w_right w_20">
-										<span>1k</span>
-									</div>
-									<div class="clearfix"></div>
-								</div>
-
-							</div>
-						</div>
-					</div>
-
-					{{donut-chart-languages}}
-
-
-					<div class="col-md-6 col-sm-6 col-xs-12" style="-webkit-filter: grayscale(80%); filter: grayscale(80%);">
-						<div class="x_panel tile fixed_height_320">
-							<div class="x_title">
-								<h2>Quick Settings <small>Soon</small></h2>
-								<ul class="nav navbar-right panel_toolbox">
-									<li><a class="collapse-link"><i class="fa fa-chevron-up"></i></a>
-									</li>
-									<li class="dropdown">
-										<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false"><i class="fa fa-wrench"></i></a>
-										<ul class="dropdown-menu" role="menu">
-											<li><a href="#">Settings 1</a>
-											</li>
-											<li><a href="#">Settings 2</a>
-											</li>
-										</ul>
-									</li>
-									<li><a class="close-link"><i class="fa fa-close"></i></a>
-									</li>
-								</ul>
-								<div class="clearfix"></div>
-							</div>
-							<div class="x_content">
-								<div class="dashboard-widget-content">
-									<ul class="quick-list">
-										<li><i class="fa fa-calendar-o"></i><a href="#">Settings</a>
-										</li>
-										<li><i class="fa fa-bars"></i><a href="#">Subscription</a>
-										</li>
-										<li><i class="fa fa-bar-chart"></i><a href="#">Auto Renewal</a> </li>
-										<li><i class="fa fa-line-chart"></i><a href="#">Achievements</a>
-										</li>
-										<li><i class="fa fa-bar-chart"></i><a href="#">Auto Renewal</a> </li>
-										<li><i class="fa fa-line-chart"></i><a href="#">Achievements</a>
-										</li>
-										<li><i class="fa fa-area-chart"></i><a href="#">Logout</a>
-										</li>
-									</ul>
-
-									<div class="sidebar-widget">
-										<h4>Profile Completion</h4>
-										<canvas width="150" height="80" id="foo" class="" style="width: 160px; height: 100px;"></canvas>
-										<div class="goal-wrapper">
-											<span class="gauge-value pull-left">$</span>
-											<span id="gauge-text" class="gauge-value pull-left">3,200</span>
-											<span id="goal-text" class="goal-value pull-right">$5,000</span>
-										</div>
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
-
+					{{user-entries}}
 				</div>
 
 

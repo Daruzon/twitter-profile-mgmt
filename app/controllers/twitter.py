@@ -106,7 +106,7 @@ class user:
 			if self.started:
 				DB.users.update(
 					{'id':self.id },
-					{'$set':{attr:value}
+					{'$set':{attr:value}, '$currentDate': {'last_update': True}
 				})
 		else:
 			self.__dict__[attr] = value
@@ -117,7 +117,7 @@ class user:
 			if self.started:
 				DB.users.update(
 					{'id':self.id },
-					{'$set':{attr:value}
+					{'$unset':{attr:True}, '$currentDate': {'last_update': True}
 				})	
 	
 	# On charge l'utilisateur depuis la BDD (par son ID)
@@ -131,15 +131,16 @@ class user:
 		else:
 			if data == None:
 				data = get_user(user_id=id)
+				data['sortable_username'] = data['name'].lower()
 			if data['url'] != None:
 				url = self.updateTwitterUrl(url=data['url'], update=False)
 				if url != None:
 					data['url'] = url
 			
-			if 'status' in data.keys():
-				del data['status']
-			if 'entities' in data.keys():
-				del data['entities']
+			#if 'status' in data.keys():
+			#	del data['status']
+			#if 'entities' in data.keys():
+			#	del data['entities']
 			
 			DB.users.insert_one(data)
 			user = DB.users.find_one({'id':id})
@@ -154,8 +155,13 @@ class user:
 			print("User not found")
 	
 	def can_query(self, request):
-		return bool(DB.accounts.find_one({'id':self.id})['limits'][request]['remaining']-2)
-	
+		entry = DB.accounts.find_one({'id':self.id})
+		if 'limits' in entry.keys():
+			return bool(entry['limits'][request]['remaining']-2)
+		else:
+			self.retrieve_api_limits()
+			return True
+		
 	def retrieve_api_limits(self):
 		limits = TwitterAPI.rate_limit_status()['resources']
 		l = {}
@@ -177,7 +183,6 @@ class user:
 		
 		
 		for cat in ['followers', 'influencers']:
-			print(config.time()+" "+cat, len(entries[cat]))
 			if isinstance(entries[cat], tuple):
 				entries[cat] = entries[cat][0].values()
 		
@@ -194,14 +199,15 @@ class user:
 			#				entries[i].append(u)
 			
 			if 'followers' not in todays_metrics.keys() or 'cursor' not in todays_metrics['followers'].keys():
-				yesterday = DB.metrics.find({"id":self.id, 'followers':{'$exists':True}, 'day':{'$ne':str(date.today())}}).sort('day', mongo.DESC)[0]
-				entries['quitters'] = list(DB.users.find({'id':{ '$in': [x for x in set(yesterday['followers']['list']) - set([y['id'] for y in entries['followers']]) ]}}))
-				entries['newcomers'] = list(DB.users.find({'id':{'$in':[x for x in set([y['id'] for y in entries['followers']]) - set(yesterday['followers']['list']) ]}}))
+				yesterday = DB.metrics.find({"id":self.id, 'followers':{'$exists':True}, 'day':{'$ne':str(date.today())}}).sort('day', mongo.DESC)
+				if yesterday != None and yesterday.count():
+					yesterday = yesterday[0]
+					entries['quitters'] = list(DB.users.find({'id':{ '$in': [x for x in set(yesterday['followers']['list']) - set([y['id'] for y in entries['followers']]) ]}}))
+					entries['newcomers'] = list(DB.users.find({'id':{'$in':[x for x in set([y['id'] for y in entries['followers']]) - set(yesterday['followers']['list']) ]}}))
 			
-				for cat in ['newcomers', 'quitters']:
-					print(config.time()+" "+cat, len(entries[cat]))
-					if isinstance(entries[cat], tuple):
-						entries[cat] = entries[cat][0].values()
+					for cat in ['newcomers', 'quitters']:
+						if isinstance(entries[cat], tuple):
+							entries[cat] = entries[cat][0].values()
 		
 		# Tant pour les entrées "followers" que "influenceurs", "newcomers" et "quitters"
 		for categories in entries:
@@ -228,27 +234,28 @@ class user:
 				
 				#print(type(_v_), _v_)
 					
-				lang = _v_['lang'][0:2]
+				_v_['lang'] = _v_['lang'][0:2]
 				#url = self.updateTwitterUrl(_v_['url'], update=False)
 				#if url != None:
 				#	_v_['url'] = url
 				
-				if 'status' in _v_.keys():
-					del _v_['status']
-				if 'entities' in _v_.keys():
-					del _v_['entities']
+				#if 'status' in _v_.keys():
+				#	del _v_['status']
+				#if 'entities' in _v_.keys():
+				#	del _v_['entities']
 				
+				_v_['sortable_username'] = _v_['name'].lower()
 				DB.users.update_one(
 					{'id': _v_['id']},
 					{
-						'$set': _v_,
+						'$set': _v_, '$currentDate': {'last_update': True}
 					},
 					upsert=True
 				)
 				
-				if lang not in _per_lang_.keys():
-					_per_lang_[lang] = 0
-				_per_lang_[lang] += 1
+				if _v_['lang'] not in _per_lang_.keys():
+					_per_lang_[_v_['lang']] = 0
+				_per_lang_[_v_['lang']] += 1
 				_ids_.append(_v_['id'])
 				_followers_.append(_v_['followers_count'])
 				_following_.append(_v_['friends_count'])
@@ -358,6 +365,41 @@ class user:
 		else:
 			return False
 	
+	def getWikiURL(self):
+		options = {}
+		for l in list(set(['en', 'fr', self.lang])):
+			wording = self.name
+			u = "https://"+l+".wikipedia.org/w/api.php?action=opensearch&format=json&formatversion=2&namespace=0&limit=10&suggest=true&search="+wording
+			search = requests.get(u, allow_redirects=True)
+			found = search.json()
+			print(found)
+			if not len(found[1]) or not len(found[1][0]):
+				continue
+			found.pop(0)
+			results = [(found[0][i], found[1][i], found[2][i]) for i in range(0,len(found[0]))]
+			if len(results):
+				if len(results[0][0]) - len(self.name) in [-1, 1]:
+					continue
+					
+				options[l] = {'name':results[0][0], 'description':results[0][1], 'url':results[0][2]}
+				break
+				
+		return options
+	
+	
+	def getLinkedInURL(self):
+		wording  = self.name.split(' ')
+		if len(wording) != 2:
+			return ''
+		
+		u = "https://www.linkedin.com/pub/dir/?search=Rechercher&first="+wording[0]+"&last="+wording[1]
+		search = requests.get(u, allow_redirects=False)
+		
+		if 'location' not in search.headers.keys():
+			return None
+		
+		return r.headers['location']
+				
 	
 	def shouldUnfollow(self):
 		trouve = False
@@ -450,7 +492,7 @@ class user:
 		# On fait la mise à jour MongoDB
 		DB.users.update(
 			{'id':self.id },
-			{'$set':{'following':True,'following_since':datetime.now()}
+			{'$set':{'following':True,'following_since':datetime.now()}, '$currentDate': {'last_update': True}
 		})
 		
 		# On fait la requête à Twitter
@@ -549,6 +591,31 @@ def get_user(user_id=None, screen_name=None):
 	u = u.__dict__['_json']
 	return u
 
+def get_absent_user_entries(ids=[]):
+	entries = list(DB.users.find({'id':{'$in':ids}}))
+	if len(ids) == len(entries):
+		return []
+	return list(set(ids) - set([x.id for x in entries]))
+
+def get_relations_list(user_id=None, screen_name=None, who='followers'):
+	request = ('followers|ids', 'friends|ids')[who=='influencers']
+	_ids = []
+	_cursor = -1
+	if me.can_query(request=request):
+		if user_id != None:
+			c = tweepy.Cursor((TwitterAPI.followers_ids, TwitterAPI.friends_ids)[who=='influencers'], user_id=user_id, cursor=_cursor)
+		elif screen_name != None:
+			c = tweepy.Cursor((TwitterAPI.followers_ids, TwitterAPI.friends_ids)[who=='influencers'], screen_name=screen_name, cursor=_cursor)
+		me.update_query_limit(request=request)
+						
+		try:
+			for id in c.items():
+				_ids.append(id)
+				if c.iterator.next_cursor != _cursor:
+					me.update_query_limit(request=request)
+					_cursor = c.iterator.next_cursor
+		finally:
+			return _ids
 
 def get_relations(user_id=None, screen_name=None, who='followers', max=2600):
 	_users = []
@@ -567,25 +634,32 @@ def get_relations(user_id=None, screen_name=None, who='followers', max=2600):
 	else:
 		todays_metrics = {who:{'list':[]}}
 	
-	request = ('followers|list', 'friends|list')[who=='influencers']
+	request = ('followers|ids', 'friends|ids')[who=='influencers']
 	if me.can_query(request=request):
 		if user_id != None:
-			c = tweepy.Cursor((TwitterAPI.followers, TwitterAPI.friends)[who=='influencers'], count=_per_page_, user_id=user_id, cursor=_cursor)
+			c = tweepy.Cursor((TwitterAPI.followers_ids, TwitterAPI.friends_ids)[who=='influencers'], user_id=user_id, cursor=_cursor)
 		elif screen_name != None:
-			c = tweepy.Cursor((TwitterAPI.followers, TwitterAPI.friends)[who=='influencers'], count=_per_page_, screen_name=screen_name, cursor=_cursor)
+			c = tweepy.Cursor((TwitterAPI.followers_ids, TwitterAPI.friends_ids)[who=='influencers'], screen_name=screen_name, cursor=_cursor)
 		me.update_query_limit(request=request)
-	
+						
 		try:
-			for user in c.items():
-				user = user.__dict__['_json']
-				_users.append(user)
-				_ids.append(user['id'])
-				_calls = len(_users) / _per_page_
+			for id in c.items():
+				_ids.append(str(id))
 				if c.iterator.next_cursor != _cursor:
 					me.update_query_limit(request=request)
-				_cursor = c.iterator.next_cursor
-				if len(_users) >= max or (not me.can_query(request=request) and len(_users) % _per_page_ == _per_page_ - 1):
-					break
+					_cursor = c.iterator.next_cursor
+			
+			if me.can_query(request='users|lookup'):
+				for slice in range(0, len(_ids), 100):
+					_c_ = TwitterAPI.lookup_users(user_ids=_ids[slice:slice+99], include_entities=True)
+					me.update_query_limit(request='users|lookup')
+					for user in _c_:
+						user = user.__dict__['_json']
+						_users.append(user)
+						_calls = len(_users) / _per_page_
+						
+						if len(_users) >= max or (not me.can_query(request=request) and len(_users) % _per_page_ == _per_page_ - 1):
+							break
 			
 		finally:
 			if _cursor != None and _cursor not in [0, -1]:
@@ -596,9 +670,10 @@ def get_relations(user_id=None, screen_name=None, who='followers', max=2600):
 				#if user_id in _last_cursor_[who].keys():
 				#	del _last_cursor_[who][user_id]
 	
-	_ids = [i for i in set(todays_metrics[who]['list']) - set(_ids)]
+	_ids = list(set(todays_metrics[who]['list']) - set(_ids))
 	for already in DB.users.find({'id':{'$in':_ids}}):
-		_users.update(already)
+		already['lang'] = already['lang'][0:2]
+		_users.update({'id':already['id']}, {'$set':already, '$currentDate': {'last_update': True}})
 	
 	return _users
 
@@ -649,14 +724,16 @@ def do_auth(id=None, data=None):
 			})
 	else:
 		me = user(id=session.SESSION['current_user'])
-	
+
+def makebrowsable():
+	to_normalize = DB.users.find({'sortable_username':{'$exists':False}})
+	for a_user in to_normalize:
+		DB.users.update({'id':a_user['id']}, {'$currentDate': {'last_update': True}, '$set':{'sortable_username':a_user['name'].lower()}})
 
 def initaccounts():
 	anciens = DB.metrics.distinct("id", {'day':str(date.today())})
 	print(config.time()+" "+str(len(anciens))+" comptes ont des métriques.")
-	
-	#anciens.append(556940295)
-	
+		
 	if len(anciens):
 		client = DB.accounts.find_one({'id':{'$nin':anciens}})
 	else:
@@ -692,11 +769,100 @@ def updateaccounts():
 		do_auth(client['id'], data=client)
 		me.retrieve_api_limits()
 		newentry = get_user(client['id'])
+		newentry['lang'] = newentry['lang'][0:2]
 		DB.users.update_one(
 			{'id': client['id']},
-			{'$set': newentry}
+			{'$set': newentry, '$currentDate': {'last_update': True}}
 		)
+	
+	#"""
+	to_document = DB.users.find({'links.wikipedia':{'$exists':False}}).sort('followers_count',mongo.DESC)[0:50]
+	for a_user in to_document:
+		u = user(a_user['id'])
+		u.lang = u.lang[0:2]
+		wiki = u.getWikiURL()
+		#print(wiki)
+		if len(wiki):
+			DB.users.update({'id':a_user['id']}, {'$currentDate': {'last_update': True}, '$set':{'links.wikipedia':wiki}})
+		else:
+			DB.users.update({'id':a_user['id']}, {'$currentDate': {'last_update': True}, '$set':{'links.wikipedia':[]}})
+	
+	to_document = DB.users.find({'links.linkedin':{'$exists':False}}).sort('followers_count',mongo.DESC)[0:10]
+	for a_user in to_document:
+		u = user(a_user['id'])
+		linkedin = u.getLinkedInURL()
 		
+		if len(linkedin):
+			DB.users.update({'id':a_user['id']}, {'$currentDate': {'last_update': True}, '$set':{'links.linkedin':linkedin}})
+		else:
+			DB.users.update({'id':a_user['id']}, {'$currentDate': {'last_update': True}, '$set':{'links.linkedin':[]}})
+	
+	
+def monitor_realtime_behaviors():
+	
+	clients = DB.accounts.find()
+	mapping = {'_newf_':'newcomers', '_leftf_':'quitters', '_newi_':'risingstars', '_lefti_':'nongrata'}
+	for client in clients:
+		do_auth(client['id'])
+		print("\n")
+		print('---------------------------')
+		print("Compte de "+client['name'])
+		me.retrieve_api_limits()
+		current = DB.users.find_one({'id':me.id})
+		compare = 'details' in current.keys()
+		if compare:
+			print("Les comportements sont déjà présents")
+			comparaison = {
+				'followers'		:	me.details['followers'],
+				'influencers'	:	me.details['influencers'],
+				'newcomers'		:	me.details['newcomers'],
+				'quitters'		:	me.details['quitters'],
+				'risingstars'	:	me.details['risingstars'],
+				'nongrata'		:	me.details['nongrata']
+			}
+		else:
+			print("Les comportements sont à initialiser")
+			me.details = {'followers':[], 'influencers':[], 'newcomers':{}, 'quitters':{}, 'risingstars':{}, 'nongrata':{}}
+		
+		print("Voici les stats de ce compte:")
+		me.details['followers'] = get_relations_list(user_id=me.id, who='followers')
+		me.details['influencers'] = get_relations_list(user_id=me.id, who='influencers')
+		
+		print(str(len(me.details['followers']))+' followers ont été trouvés')
+		print(str(len(me.details['influencers']))+' influenceurs ont été trouvés')
+		
+		if compare:
+			news = {
+				'_newf_'	:	list(set(me.details['followers']) - set(comparaison['followers'])),
+				'_leftf_'	:	list(set(comparaison['followers']) - set(me.details['followers'])),
+				'_newi_'	:	list(set(me.details['influencers']) - set(comparaison['influencers'])),
+				'_lefti_'	:	list(set(comparaison['influencers']) - set(me.details['influencers']))
+			}
+			for k in news:
+				for id in news[k]:
+					if str(id) in comparaison[mapping[k]]:
+						comparaison[mapping[k]][str(id)].append(time.time())
+					else:
+						comparaison[mapping[k]][str(id)] = [time.time()]
+			me.details = {
+				'followers'		:	me.details['followers'],
+				'influencers'	:	me.details['influencers'],
+				'newcomers'		:	comparaison['newcomers'],
+				'quitters'		:	comparaison['quitters'],
+				'risingstars'	:	comparaison['risingstars'],
+				'nongrata'		:	comparaison['nongrata']
+			}
+		else:
+			me.details = {
+				'followers'		:	me.details['followers'],
+				'influencers'	:	me.details['influencers'],
+				'newcomers'		:	{},
+				'quitters'		:	{},
+				'risingstars'	:	{},
+				'nongrata'		:	{}
+			}
+
+
 """
 
 def scan_descriptions():
@@ -732,7 +898,67 @@ def scan_descriptions():
 """
 
 def dispatch():
-	if request.called_method == 'dashboard':
+	if request.called_method == 'network':
+		if 'access_token' not in session.SESSION.data.keys():
+			output.echo('Location: '+request.exacthost+'/twitter/login', hook='http-headers', overwrite=True)
+			output.echo('Status: 302 Found', hook='http-headers')
+			output.include('null', 'root')
+		else:
+			output.include('twitter.browser', 'root', overwrite=True)
+			output.echo(me.name, hook='User Name')
+			output.echo(me.profile_image_url.replace('_normal',''), hook='Twitter profile picture')
+			if 'details' in me.data.keys() and 'influencers' in me.data['details'].keys():
+				languages = list(set([x[0:2] for x in DB.users.distinct('lang', {'id':{'$in':me.details['influencers']}})]))
+				req = {'id':{'$in':me.details['influencers']}}
+				if 'lang' in request.params.keys() and request.params['lang'] in languages:
+					req['lang'] = request.params['lang']
+				
+				users = DB.users.find(req).sort('sortable_username', mongo.ASC)
+				_count_ = users.count()
+				_pages_ = int(_count_ / 100) + int(bool(_count_ % 100))
+				current_page = min(1 if 'page' not in request.params.keys() else int(request.params['page']), _pages_)
+				users = users[(current_page-1)*100:(current_page*100)]
+				
+				for u in users:
+					u = user(id=u['id'], data=u)
+					entry = {
+						'username'				:	u.name,
+						'screen_name'			:	u.screen_name,
+						'image'					:	u.profile_image_url.replace('_normal',''),
+						'description'			:	u.description,
+						'language'				:	u.lang,
+						'nb_tweets'				:	output.shorten(u.statuses_count),
+						'nb_influencers'		:	output.shorten(u.friends_count),
+						'nb_followers'			:	output.shorten(u.followers_count),
+						'relationship-status'	:	' '.join([
+														('not-following', 'following')[u.id in me.details['influencers']],
+														('not-follower', 'follower')[u.id in me.details['followers']],
+														('not-newcomer', 'newcomer')[str(u.id) in me.details['newcomers'].keys() and me.details['newcomers'][str(u.id)].pop() > time.time() - 86400],
+														('not-quitter', 'quitter')[str(u.id) in me.details['newcomers'].keys()],
+													]),
+						'external-links'		:	'',
+						'current-relationships'	:	''
+					}
+					if 'links' in u.data.keys():
+						if 'wikipedia' in u.links.keys() and len(u.links['wikipedia']):
+							found = False
+							for lg in list(set([u.lang, 'en', 'fr'])):
+								if lg in u.links['wikipedia'].keys():
+									entry['external-links'] += '<a style="color:white;" target="_blank" href="'+u.links['wikipedia'][lg]['url']+'"><i class="fa fa-wikipedia-w"></i></a>'
+									found = True
+									break
+							if not found:
+								entry['external-links'] += '<a style="color:white;" target="_blank" href="'+(u.links['wikipedia'].popitem()[1]['url'])+'"><i class="fa fa-wikipedia-w"></i></a>'
+					output.include('twitter.block.userentry', hook='user-entries', fill=entry)
+				
+				#output.echo(, hook='current-relationships')
+				output.include('twitter.block.actionbutton', hook='buttons', fill={'id-twittos':u.id})
+				
+				output.echo(output.paginate(style='numbers', current=current_page, params=request.params, criterion='page', last=_pages_), hook='number-pagination')
+				output.echo(output.paginate(style='languages', current=('' if 'lang' not in request.params.keys() else request.params['lang']) , params={}, criterion='lang', options=list(languages)), hook='language-pagination')
+				
+		
+	elif request.called_method == 'dashboard':
 		if 'access_token' not in session.SESSION.data.keys():
 			output.echo('Location: '+request.exacthost+'/twitter/login', hook='http-headers', overwrite=True)
 			output.echo('Status: 302 Found', hook='http-headers')
@@ -749,95 +975,93 @@ def dispatch():
 				if request.called_submethod == '':
 					if 'influencers' in today.keys():	
 						today_map['influencers'] = {
-							'bigcounter-icon'	:	'user',
-							'bigcounter-name'	:	'Your influencers',
-							'bigcounter-title'	:	'Influencers',
-							'bigcounter-color'	:	'',
-							'bigcounter-abs'	:	today['influencers']['number']
+							'bigcounter-icon'			:	'user',
+							'bigcounter-name'			:	'Your influencers',
+							'bigcounter-title'			:	'Influencers',
+							'bigcounter-color'			:	'',
+							'bigcounter-length-medium'	:	4,
+							'bigcounter-length-short'	:	12,
+							'bigcounter-abs'			:	today['influencers']['number']
 						}
 					if 'followers' in today.keys():
 						today_map['followers'] = {
-							'bigcounter-icon'	:	'user',
-							'bigcounter-name'	:	'Your followers',
-							'bigcounter-title'	:	'Followers',
-							'bigcounter-color'	:	'',
-							'bigcounter-abs'	:	today['followers']['number']
+							'bigcounter-icon'			:	'user',
+							'bigcounter-name'			:	'Your followers',
+							'bigcounter-title'			:	'Followers',
+							'bigcounter-color'			:	'',
+							'bigcounter-length-medium'	:	4,
+							'bigcounter-length-short'	:	12,
+							'bigcounter-abs'			:	today['followers']['number']
 						}
 					if len(today_map) == 2:
 						today_map['ratio_influence'] = {
-							'bigcounter-icon'	:	'user',
-							'bigcounter-name'	:	'Your influence ratio',
-							'bigcounter-title'	:	'Ratio',
-							'bigcounter-color'	:	'green',
-							'bigcounter-abs'	:	round(today['followers']['number'] / today['influencers']['number'], 2)
+							'bigcounter-icon'			:	'user',
+							'bigcounter-name'			:	'Your influence ratio',
+							'bigcounter-title'			:	'Ratio',
+							'bigcounter-color'			:	'green',
+							'bigcounter-length-medium'	:	4,
+							'bigcounter-length-short'	:	12,
+							'bigcounter-abs'			:	round(today['followers']['number'] / today['influencers']['number'], 3)
 						}
+						today['ratio_influence'] = {'number':round(today['followers']['number'] / today['influencers']['number'], 3)}
 					
 					if count_metrics > 7:
 						previous = DB.metrics.find({'id':me.id}).sort('day', mongo.DESC)[7]
 						previous_map = OrderedDict()
 						if 'followers' in previous.keys() and 'influencers' in previous.keys():
-							previous['ratio_influence'] = {'number':round(previous['followers']['number'] / previous['influencers']['number'], 2)}
+							previous['ratio_influence'] = {'number':round(previous['followers']['number'] / previous['influencers']['number'], 3)}
 						
 						for i in today_map.keys():
 							if i in previous.keys():
 								previous_map[i] = {
 									'bigcounter-rate-color'		:	('green','red')[previous[i]['number'] > today[i]['number']],
 									'bigcounter-rate-sign'		:	('asc','desc')[previous[i]['number'] > today[i]['number']],
-									'bigcounter-rate'			:	fabs(today[i]['number'] - previous[i]['number']) / previous[i]['number'],
-									'bigcounter-variation-text'	:	('lower','higher')[previous[i]['number'] > today[i]['number']]+' than last week'
+									'bigcounter-rate'			:	round(fabs(today[i]['number'] - previous[i]['number']) / previous[i]['number'], 2),
+									'bigcounter-variation-text'	:	('lower','higher')[previous[i]['number'] < today[i]['number']]+' than last week'
 								}
 						
 						for i in today_map:
 							if i in previous_map:
 								today_map[i].update(previous_map[i])
-								if len(today_map) < 4:
-									today_map[i]['bigcounter-length-medium'] = 4
-									today_map[i]['bigcounter-length-short'] = 12
-								else:
-									today_map[i]['bigcounter-length-medium'] = 4
-									today_map[i]['bigcounter-length-short'] = 12
-								
 								output.include('twitter.block.headercounter', hook='headercounter', fill=today_map[i])
 							else:
 								output.include('twitter.block.headercounter-wo-rate', hook='headercounter', fill=today_map[i])
 					else:
 						for i in today_map:
-							if len(today_map) < 4:
-								today_map[i]['bigcounter-length-medium'] = 4
-								today_map[i]['bigcounter-length-short'] = 12
-							else:
-								today_map[i]['bigcounter-length-medium'] = 4
-								today_map[i]['bigcounter-length-short'] = 12
-							
 							output.include('twitter.block.headercounter-wo-rate', hook='headercounter', fill=today_map[i])
 					
 					output.echo('', hook='donut-chart-languages')
 					
 				elif request.called_submethod == 'variations':
-					if 'newcomers' in today.keys():	
-						today_map['newcomers'] = {
-							'bigcounter-icon'	:	'user',
-							'bigcounter-name'	:	'Newcomers',
-							'bigcounter-title'	:	'Newcomers',
-							'bigcounter-color'	:	'',
-							'bigcounter-abs'	:	today['newcomers']['number']
-						}
-					if 'quitters' in today.keys():
-						today_map['quitters'] = {
-							'bigcounter-icon'	:	'user',
-							'bigcounter-name'	:	'Quitters',
-							'bigcounter-title'	:	'Quitters',
-							'bigcounter-color'	:	'',
-							'bigcounter-abs'	:	-today['quitters']['number']
-						}
-					if len(today_map) == 2:
-						today_map['net_variation'] = {
-							'bigcounter-icon'	:	'user',
-							'bigcounter-name'	:	'Your net variation',
-							'bigcounter-title'	:	'Variation',
-							'bigcounter-color'	:	'green',
-							'bigcounter-abs'	:	today['newcomers']['number'] - today['quitters']['number']
-						}
+					today_map['newcomers'] = {
+						'bigcounter-icon'			:	'user',
+						'bigcounter-name'			:	'Newcomers',
+						'bigcounter-title'			:	'Newcomers',
+						'bigcounter-length-medium'	:	4,
+						'bigcounter-length-short'	:	12,
+						'bigcounter-color'			:	'',
+						'bigcounter-abs'			:	0 if 'newcomers' not in today.keys() else today['newcomers']['number']
+					}
+					
+					today_map['quitters'] = {
+						'bigcounter-icon'			:	'user',
+						'bigcounter-name'			:	'Quitters',
+						'bigcounter-title'			:	'Quitters',
+						'bigcounter-color'			:	'',
+						'bigcounter-length-medium'	:	4,
+						'bigcounter-length-short'	:	12,
+						'bigcounter-abs'			:	0 if 'quitters' not in today.keys() else 0-today['quitters']['number']
+					}
+						
+					today_map['net_variation'] = {
+						'bigcounter-icon'			:	'user',
+						'bigcounter-name'			:	'Your net variation',
+						'bigcounter-title'			:	'Net variation',
+						'bigcounter-color'			:	'green',
+						'bigcounter-length-medium'	:	4,
+						'bigcounter-length-short'	:	12,
+						'bigcounter-abs'			:	today_map['newcomers']['bigcounter-abs'] + today_map['quitters']['bigcounter-abs']
+					}
 					
 					if count_metrics > 7:
 						previous = DB.metrics.find({'id':me.id}).sort('day', mongo.DESC)[7]
@@ -850,31 +1074,17 @@ def dispatch():
 									'bigcounter-rate-color'		:	('green','red')[previous[i]['number'] > today[i]['number']],
 									'bigcounter-rate-sign'		:	('asc','desc')[previous[i]['number'] > today[i]['number']],
 									'bigcounter-rate'			:	fabs(today[i]['number'] - previous[i]['number']) / previous[i]['number'],
-									'bigcounter-variation-text'	:	('lower','higher')[previous[i]['number'] > today[i]['number']]+' than last week'
+									'bigcounter-variation-text'	:	('lower','higher')[previous[i]['number'] < today[i]['number']]+' than last week'
 								}
 						
 						for i in today_map:
 							if i in previous_map:
 								today_map[i].update(previous_map[i])
-								if len(today_map) < 4:
-									today_map[i]['bigcounter-length-medium'] = 4
-									today_map[i]['bigcounter-length-short'] = 12
-								else:
-									today_map[i]['bigcounter-length-medium'] = 4
-									today_map[i]['bigcounter-length-short'] = 12
-								
 								output.include('twitter.block.headercounter', hook='headercounter', fill=today_map[i])
 							else:
 								output.include('twitter.block.headercounter-wo-rate', hook='headercounter', fill=today_map[i])
 					else:
 						for i in today_map:
-							if len(today_map) < 4:
-								today_map[i]['bigcounter-length-medium'] = 4
-								today_map[i]['bigcounter-length-short'] = 12
-							else:
-								today_map[i]['bigcounter-length-medium'] = 4
-								today_map[i]['bigcounter-length-short'] = 12
-							
 							output.include('twitter.block.headercounter-wo-rate', hook='headercounter', fill=today_map[i])
 					
 					output.echo('', hook='donut-chart-languages')
@@ -884,25 +1094,31 @@ def dispatch():
 					
 					if target in today.keys():	
 						today_map['avg_influencers'] = {
-							'bigcounter-icon'	:	'user',
-							'bigcounter-name'	:	'Their influencers (avg)',
-							'bigcounter-title'	:	'Influencers',
-							'bigcounter-color'	:	'',
-							'bigcounter-abs'	:	output.shorten(today[target]['avg_influencers'])
+							'bigcounter-icon'			:	'user',
+							'bigcounter-name'			:	'Their influencers (avg)',
+							'bigcounter-title'			:	'Influencers',
+							'bigcounter-color'			:	'',
+							'bigcounter-length-medium'	:	4,
+							'bigcounter-length-short'	:	12,
+							'bigcounter-abs'			:	output.shorten(today[target]['avg_influencers'])
 						}
 						today_map['avg_followers'] = {
-							'bigcounter-icon'	:	'user',
-							'bigcounter-name'	:	'Their followers (avg)',
-							'bigcounter-title'	:	'Followers',
-							'bigcounter-color'	:	'',
-							'bigcounter-abs'	:	output.shorten(today[target]['avg_followers'])
+							'bigcounter-icon'			:	'user',
+							'bigcounter-name'			:	'Their followers (avg)',
+							'bigcounter-title'			:	'Followers',
+							'bigcounter-color'			:	'',
+							'bigcounter-length-medium'	:	4,
+							'bigcounter-length-short'	:	12,
+							'bigcounter-abs'			:	output.shorten(today[target]['avg_followers'])
 						}
 						today_map['ratio_influence'] = {
-							'bigcounter-icon'	:	'user',
-							'bigcounter-name'	:	'Influence ratio (avg)',
-							'bigcounter-title'	:	'Ratio',
-							'bigcounter-color'	:	'green',
-							'bigcounter-abs'	:	output.shorten(today[target]['ratio_influence'])
+							'bigcounter-icon'			:	'user',
+							'bigcounter-name'			:	'Influence ratio (avg)',
+							'bigcounter-title'			:	'Ratio',
+							'bigcounter-color'			:	'green',
+							'bigcounter-length-medium'	:	4,
+							'bigcounter-length-short'	:	12,
+							'bigcounter-abs'			:	output.shorten(today[target]['ratio_influence'])
 						}
 					else:
 						output.echo('', hook='headercounter')
@@ -910,40 +1126,26 @@ def dispatch():
 					if count_metrics > 7:
 						previous = DB.metrics.find({'id':me.id}).sort('day', mongo.DESC)[7]
 						previous_map = OrderedDict()
-						#if target in previous.keys():
-						#	previous['ratio_follows'] = {'number':round(previous['followers']['number'] / previous['influencers']['number'], 2)}
+						if target in previous.keys():
+							previous['ratio_influence'] = {'number':round(previous['followers']['number'] / previous['influencers']['number'], 3)}
 						
 						for i in today_map.keys():
 							if i in previous[target].keys():
 								previous_map[i] = {
 									'bigcounter-rate-color'		:	('green','red')[previous[target][i] > today[target][i]],
 									'bigcounter-rate-sign'		:	('asc','desc')[previous[target][i] > today[target][i]],
-									'bigcounter-rate'			:	fabs(today[target][i] - previous[target][i]) / previous[target][i],
-									'bigcounter-variation-text'	:	('lower','higher')[previous[target][i] > today[target][i]]+' than last week'
+									'bigcounter-rate'			:	round(fabs(today[target][i] - previous[target][i]) / previous[target][i], 3),
+									'bigcounter-variation-text'	:	('lower','higher')[previous[target][i] < today[target][i]]+' than last week'
 								}
 						
 						for i in today_map:
-							if j in previous_map:
-								today_map[i].update(previous_map[j])
-								if len(today_map) < 4:
-									today_map[i]['bigcounter-length-medium'] = 4
-									today_map[i]['bigcounter-length-short'] = 12
-								else:
-									today_map[i]['bigcounter-length-medium'] = 3
-									today_map[i]['bigcounter-length-short'] = 12
-								
+							if i in previous_map:
+								today_map[i].update(previous_map[i])
 								output.include('twitter.block.headercounter', hook='headercounter', fill=today_map[i])
 							else:
 								output.include('twitter.block.headercounter-wo-rate', hook='headercounter', fill=today_map[i])
 					else:
 						for i in today_map:
-							if len(today_map) < 4:
-								today_map[i]['bigcounter-length-medium'] = 4
-								today_map[i]['bigcounter-length-short'] = 12
-							else:
-								today_map[i]['bigcounter-length-medium'] = 3
-								today_map[i]['bigcounter-length-short'] = 12
-							
 							output.include('twitter.block.headercounter-wo-rate', hook='headercounter', fill=today_map[i])
 					
 					
@@ -1010,10 +1212,14 @@ def dispatch():
 					
 				days = DB.metrics.find({'id':me.id, 'time':{'$gt':_start_, '$lt':_end_}}).sort('day', mongo.ASC)
 				months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-				_days_ = OrderedDict()
+				_charts_ = OrderedDict()
 				
 				for key in today_map.keys():
-					_days_[key] = []
+					if request.called_submethod == 'variations' and key != 'net_variation':
+						_charts_['movements'] = []
+						_charts_[key] = []
+					else:
+						_charts_[key] = []
 				
 				tabheaders = ''
 				tabcontents = ''
@@ -1026,12 +1232,12 @@ def dispatch():
 					_, the_month, the_day = day['day'].split('-')
 					the_right_day = months[int(the_month)-1]+' '+the_day
 					chartnames.append(the_right_day)
-					for key in _days_:
+					for key in _charts_:
 						if request.called_submethod == '':
 							if key != 'ratio_influence':
-								_days_[key].append("{name:'"+the_right_day+"',y:"+str(day[key]['number'])+"}")
+								_charts_[key].append("{name:'"+the_right_day+"',y:"+str(day[key]['number'])+"}")
 							else:
-								_days_[key].append("{name:'"+the_right_day+"',y:"+str(round(day['followers']['number'] / day['influencers']['number'], 2))+"}")
+								_charts_[key].append("{name:'"+the_right_day+"',y:"+str(round(day['followers']['number'] / day['influencers']['number'], 3))+"}")
 							
 						elif request.called_submethod == 'variations':
 							if key != 'net_variation':
@@ -1040,45 +1246,56 @@ def dispatch():
 								else:
 									to_add = 0 if key not in day.keys() else 0 - day[key]['number']
 								
-								_days_[key].append("{name:'"+the_right_day+"',y:"+str(to_add)+"}")
+								_charts_[key].append("{name:'"+the_right_day+"',y:"+str(to_add)+"}")
+								#_charts_['movements'].append("{name:'"+the_right_day+"',y:"+str(to_add)+"}")
 							else:
 								_newcomers_ = 0 if 'newcomers' not in day.keys() else day['newcomers']['number']
 								_quitters_ = 0 if 'quitters' not in day.keys() else day['quitters']['number']
-								_days_[key].append("{name:'"+the_right_day+"',y:"+str(_newcomers_ - _quitters_)+"}")
+								_charts_[key].append("{name:'"+the_right_day+"',y:"+str(_newcomers_ - _quitters_)+"}")
 						else:
-							_days_[key].append("{name:'"+the_right_day+"',y:"+str(round(day[request.called_submethod][key], 2))+"}")
+							_charts_[key].append("{name:'"+the_right_day+"',y:"+str(round(day[request.called_submethod][key], 2))+"}")
 				
 				chartkeys = '["'+'","'.join(chartnames)+'"]'
 				
-				for k, v in _days_.items():
+				string = string2 = ""
+				for k, v in _charts_.items():
 					if request.called_submethod == 'variations':
-						if k == 'newcomers':
-							string = "{type:'areaspline',marker:{enabled:false}, color:'rgb(110,185,110)', name:'"+today_map[k]['bigcounter-name']+"', data:["+','.join(v)+"]}"
-							string2 = ("{type:'areaspline',marker:{enabled:false}, color:'rgb(110,185,110)', name:'"+today_map[k]['bigcounter-name']+"', data:["+','.join(v)+"]}").replace("'", '"')
-							tabdata += ('', ',')[int(bool(len(tabdata)))]+"\n{container:'"+k+"', title:'"+today_map[k]['bigcounter-name']+"', data:"+string2+"}"
+						if k == 'movements':
+							_cc_ = {'quitters':'rgb(200,100,100)', 'newcomers':'rgb(100,200,100)'}
+							for i in ['quitters', 'newcomers']:
+								string += ",{type:'areaspline',marker:{enabled:false}, color:'"+_cc_[i]
+								string += "', name:'"+today_map[i]['bigcounter-name']+"', data:["
+								string += ','.join(_charts_[i])+"]}"
+								string2 += (",{type:'areaspline',marker:{enabled:false}, color:'"+_cc_[i]+"', name:'"+today_map[i]['bigcounter-name']+"', data:["+','.join(_charts_[i])+"]}").replace("'", '"')
+							
+							# Données cumulées + et -
+							date_map['chart-data'].append(string[1:])
+							tabdata = ('', ',')[int(bool(len(tabdata)))]+"\n{container:'plus-and-minus', title:'Variations', data:["+string2[1:]+"]}"
+							tabcontents += '<div role="tabpanel" class="tab-pane '+('active','')[int(bool(len(tabcontents)))]+'" id="chart_tab_plus-and-minus" style="height:270px;"></div>'
+							tabheaders += '<li role="presentation" class="'+('active','')[int(bool(len(tabheaders)))]+'"><a href="#chart_tab_plus-and-minus" aria-controls="profile" role="tab" data-toggle="tab">Variations</a></li>'
 						
-						elif k == 'quitters':
-							string = "{type:'areaspline',marker:{enabled:false}, color:'rgb(185,90,90)', name:'"+today_map[k]['bigcounter-name']+"', data:["+','.join(v)+"]}"
-							string2 = ("{type:'areaspline',marker:{enabled:false}, color:'rgb(185,90,90)', name:'"+today_map[k]['bigcounter-name']+"', data:["+','.join(v)+"]}").replace("'", '"')
-							tabdata += ('', ',')[int(bool(len(tabdata)))]+"\n{container:'"+k+"', title:'"+today_map[k]['bigcounter-name']+"', data:"+string2+"}"
-						
+						elif k in ['quitters', 'newcomers']:
+							pass
+							
 						else:
 							string = "{type:'spline',marker:{enabled:false}, color:'rgb(220,180,110)', name:'"+today_map[k]['bigcounter-name']+"', data:["+','.join(v)+"]}"
 							string2 = ("{type:'spline',marker:{enabled:false}, color:'rgb(220,180,110)', name:'"+today_map[k]['bigcounter-name']+"', data:["+','.join(v)+"]}").replace("'", '"')
-							tabdata += ('', ',')[int(bool(len(tabdata)))]+"\n{container:'"+k+"', title:'"+today_map[k]['bigcounter-name']+"', data:"+string2+"}"
+							tabdata += ('', ',')[int(bool(len(tabdata)))]+"\n{container:'"+k+"', title:'"+today_map[k]['bigcounter-name']+"', data:["+string2+"]}"
 						
+							tabcontents += '<div role="tabpanel" class="tab-pane '+('active','')[int(bool(len(tabcontents)))]+'" id="chart_tab_'+k+'" style="height:270px;"></div>'
+							tabheaders += '<li role="presentation" class="'+('active','')[int(bool(len(tabheaders)))]+'"><a href="#chart_tab_'+k+'" aria-controls="profile" role="tab" data-toggle="tab">'+today_map[k]['bigcounter-title']+'</a></li>'
 						
-						date_map['chart-data'].append(string)
-						tabcontents += '<div role="tabpanel" class="tab-pane '+('active','')[int(bool(len(tabcontents)))]+'" id="chart_tab_'+k+'" style="height:270px;"></div>'
-						tabheaders += '<li role="presentation" class="'+('active','')[int(bool(len(tabheaders)))]+'"><a href="#chart_tab_'+k+'" aria-controls="profile" role="tab" data-toggle="tab">'+today_map[k]['bigcounter-title']+'</a></li>'
-						
+						for i in ['quitters', 'newcomers']:
+							if i in _charts_.keys():
+								del _charts_[i]
+								
 					else:
 						string = "{type:'spline',marker:{enabled:false}, name:'"+today_map[k]['bigcounter-name']+"', data:["+','.join(v)+"]}"
 						string2 = ("{type:'spline',marker:{enabled:false}, name:'"+today_map[k]['bigcounter-name']+"', data:["+','.join(v)+"]}").replace("'", '"')
 						date_map['chart-data'].append(string)
 						tabheaders += '<li role="presentation" class="'+('active','')[int(bool(len(tabcontents)))]+'"><a href="#chart_tab_'+k+'" aria-controls="profile" role="tab" data-toggle="tab">'+today_map[k]['bigcounter-title']+'</a></li>'
 						tabcontents += '<div role="tabpanel" class="tab-pane '+('active','')[int(bool(len(tabcontents)))]+'" id="chart_tab_'+k+'" style="height:270px;"></div>'
-						tabdata += ('', ',')[int(bool(len(tabdata)))]+"\n{container:'"+k+"', title:'"+today_map[k]['bigcounter-name']+"', data:"+string2+"}"
+						tabdata += ('', ',')[int(bool(len(tabdata)))]+"\n{container:'"+k+"', title:'"+today_map[k]['bigcounter-name']+"', data:["+string2+"]}"
 				
 				date_map = {'chart-data':','.join(date_map['chart-data']), 'tabs-header':tabheaders, 'tabs-content':tabcontents, 'chart-keys':chartkeys, 'tabdata':'['+tabdata+']'}
 				if 'json' in request.params.keys():

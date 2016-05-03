@@ -105,8 +105,6 @@ def get_colorcodes(num=6, rgb=True):
 			_colors_.append("rgb("+color_code+")")
 	
 	return _colors_
-	
-
 
 def render_response():
 	done = []
@@ -128,9 +126,137 @@ def render_response():
 		del templates[t]
 	
 	rendered = True
-	
-	
 	print(templates['root'])
 	
+def paginate(style='numbers', base='', current=1, params={}, criterion='page', last=1, options=[]):
+	if style not in ['numbers', 'languages']:
+		style = 'numbers'
+	
+	if style == 'letters':
+		chain = 'abcdefghijklmnopqrstuvwxyz'
+		"""
+		_ps_ = ''
+		_ps_ += '<div style="text-align:center;clear:both;">'
+		if len(params):
+			_ps_ +='<ul class="pagination pagination-sm lettres"><li><a href="?">Reset</a></li></ul>'
+		
+		_ps_ += '<ul class="pagination pagination-sm lettres">'
+		if 'begins' in params.keys() and params['begins'].find(str(current)
+			{if @strpos($chaine, Request.get('params')['begins']) > 0}
+			<li>
+				<a
+					data-toggle="tooltip" data-placement="top" title="{:t('Clavier')} : <span class='glyphicon glyphicon-arrow-left'></span>"
+					id="go-left" href="?{:@http_build_query(array_merge($p, array('begins'=>$chaine[strpos($chaine, Request.get('params')['begins'])-1])))}">
+			{elseif @Request.get('params')['begins'] == $chaine[0]}
+			<li>
+				<a
+					data-toggle="tooltip" data-placement="top" title="{:t('Clavier')} : <span class='glyphicon glyphicon-arrow-left'></span>"
+					id="go-left" href="?{:@http_build_query($p)}">
+			{else}
+			<li>
+				<a
+				data-toggle="tooltip" data-placement="top" title="{:t('Clavier')} : <span class='glyphicon glyphicon-arrow-left'></span>"
+					id="go-left" href="?{:@http_build_query(array_merge($p, array('begins'=>$chaine[strlen($chaine)-1])))}">
+			{/if}<span class="glyphicon glyphicon-chevron-left"></span></a>
+			</li>
+			<li {:(empty(Request.get('params')['begins'])) ? 'class="active"' : ''}>
+				<a href="?{:@http_build_query($p)}">
+					{:t("Tout")}
+				</a>
+			</li>
+			{for $i = 0; $i < strlen($chaine); $i++}
+			<li {:( ($chaine[$i] == @Request.get('params')['begins']) ? 'class="active"' : '' )}>
+				<a href="?{:@http_build_query(array_merge($p, array('begins'=>$chaine[$i])))}">
+					{:strtoupper($chaine[$i])}
+				</a>
+			</li>
+			{/for}
+			<li>
+			{if @strpos(' '.$chaine, @Request.get('params')['begins']) > 0 And @strpos($chaine, @Request.get('params')['begins']) < strlen($chaine)-1}
+			<li>
+				<a
+					data-toggle="tooltip" data-placement="top" title="{:t('Clavier')} : <span class='glyphicon glyphicon-arrow-right'></span>"
+					id="go-right" href="?{:http_build_query(@array_merge($p, array('begins'=>$chaine[@(int)strpos($chaine, Request.get('params')['begins'])+1])))}">
+			{elseif @empty(Request.get('params')['begins'])}
+				<a
+					data-toggle="tooltip" data-placement="top" title="{:t('Clavier')} : <span class='glyphicon glyphicon-arrow-right'></span>"
+					id="go-right" href="?{:http_build_query(@array_merge($p, array('begins'=>$chaine[0])))}">
+			{else}
+			<li>
+				<a
+					data-toggle="tooltip" data-placement="top" title="{:t('Clavier')} : <span class='glyphicon glyphicon-arrow-right'></span>"
+					id="go-right" href="?{:@http_build_query($p)}">
+			{/if}<span class="glyphicon glyphicon-chevron-right"></span></a>
+			</li>
+		</ul>
+		_ps_ += '</div>'
+		
+		"""
+	
+	elif style == 'languages':
+		
+		
+		_ps_ = '<div style="text-align:center;clear:both;">'
+		
+		if len(current):
+			_ps_ +='<ul class="pagination pagination-sm langues" style="margin:5px;"><li><a href="?">Reset</a></li></ul>'
+		
+		_ps_ += '<ul class="pagination pagination-sm chiffres" style="margin:5px;">'
+		
+		for i in sorted(options):
+			r = params
+			r[criterion] = i
+			chain = base + '?' + '&'.join([x+'='+y for x,y in r.items()])
+			_ps_ += '<li'+('',' class="active"')[i == current]+'><a href="'+chain+'"><img src="/static/img/flags/lang/'+str(i)+'.png"/></a></li>'
+		
+		_ps_ += '</ul></div>'
+		
+		
+	elif style == 'numbers':
+		
+		_ps_ = '<div style="text-align:center;clear:both;"><ul class="pagination pagination-sm chiffres" style="margin:5px;">'
+		_last_ellipse_ = 0
+		
+		r = params
+		r[criterion] = str(1)
+		chain = base + '?' + '&'.join([x+'='+y for x,y in r.items()])
+		_ps_ += ('<li'+('',' class="disabled"')[1 == current]+'><a id="go-left" href="'+chain+'"><span class="glyphicon glyphicon-chevron-left"></span></a></li>')
+		
+		r[criterion] = str(current-1)
+		chain = base + '?' + '&'.join([x+'='+y for x,y in r.items()])
+		_ps_ += ('<li'+('',' class="disabled"')[1 == current]+'><a id="go-left" href="'+chain+'"><span class="glyphicon glyphicon-arrow-left"></span></a></li>')
+		
+		for i in range(1, last+1):
+			if i not in list(set([1, last]) | set(range(max(1,current-4), min(last, current+4)))):
+				if _last_ellipse_ != i-1:
+					_ps_ += '<li style="cursor:not-allowed;"><a>...</a></li>'
+				_last_ellipse_ = i
+			else:
+				r = params
+				r[criterion] = str(i)
+				chain = base + '?' + '&'.join([x+'='+y for x,y in r.items()])
+				_ps_ += '<li'+('',' class="active"')[i == current]+'><a href="'+chain+'">'+str(i)+'</a></li>'
+			
+			
+		r = params
+		r[criterion] = str(current+1)
+		chain = base + '?' + '&'.join([x+'='+y for x,y in r.items()])
+		_ps_ += ('<li'+('',' class="disabled"')[last == current]+'><a id="go-right" href="'+chain+'"><span class="glyphicon glyphicon-arrow-right"></span></a></li>')
+		
+		r[criterion] = str(last)
+		chain = base + '?' + '&'.join([x+'='+y for x,y in r.items()])
+		_ps_ += ('<li'+('',' class="disabled"')[last == current]+'><a id="go-right" href="'+chain+'"><span class="glyphicon glyphicon-chevron-right"></span></a></li>')
+			
+		
+		_ps_ += '</ul></div>'
+		
+	
+	return _ps_
+		
+		
+		
+
+
+
 include('html.default', 'root')
 	

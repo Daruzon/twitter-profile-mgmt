@@ -60,6 +60,8 @@ if __name__ == "__main__":
 			print("<div style='display:none;'>")
 			print(repr(traceback.format_tb(exc_traceback)).replace("\\n', '", "',\n '").replace("\\n", "\n"))
 			print(exc_value)
+			print(exc_type)
+			print(out)
 			print("</div>")
 		
 		# Si erreur 404
