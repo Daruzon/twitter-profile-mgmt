@@ -898,12 +898,48 @@ def scan_descriptions():
 """
 
 def dispatch():
-	if request.called_method == 'network':
-		if 'access_token' not in session.SESSION.data.keys():
+	
+	if 'access_token' not in session.SESSION.data.keys():
+		if request.called_method == 'callback':
+			if 'denied' in request.params:
+				del session.SESSION['request_token']
+				del session.SESSION['request_token_secret']
+				output.echo('Location: '+request.exacthost+'/twitter/login?reason=authorization_denied', hook='http-headers', overwrite=True)
+				output.include('null', 'root')
+			else:
+				access_credentials = get_access_token(consumer_key, consumer_secret)
+				session.SESSION['access_token'] = access_credentials[0]
+				session.SESSION['access_token_secret'] = access_credentials[1]
+				del session.SESSION['request_token']
+				del session.SESSION['request_token_secret']
+				output.echo('Location: '+request.exacthost+'/twitter/dashboard', hook='http-headers', overwrite=True)
+				output.include('null', 'root')
+		
+		elif request.called_method == 'login':
+			if 'login' in request.params.keys():
+				request_credentials = authorize(consumer_key, consumer_secret)
+				_url = request_credentials[0]
+				session.SESSION['request_token'] = request_credentials[1]
+				session.SESSION['request_token_secret'] = request_credentials[2]
+				output.echo('Location: '+_url, hook='http-headers', overwrite=True)
+				output.include('null', 'root', overwrite=True)
+			else:
+				output.include('twitter.login', 'root', overwrite=True)
+		
+		else:
 			output.echo('Location: '+request.exacthost+'/twitter/login', hook='http-headers', overwrite=True)
 			output.echo('Status: 302 Found', hook='http-headers')
 			output.include('null', 'root')
-		else:
+	else:
+		if request.called_method == 'logout':
+			request_credentials = authorize(consumer_key, consumer_secret)
+			del session.SESSION['access_token']
+			del session.SESSION['access_token_secret']
+			del session.SESSION['current_user']
+			output.echo('Location: '+request.exacthost+'/twitter/login', hook='http-headers', overwrite=True)
+			output.include('null', 'root', overwrite=True)
+		
+		elif request.called_method == 'network':
 			output.include('twitter.browser', 'root', overwrite=True)
 			output.echo(me.name, hook='User Name')
 			output.echo(me.profile_image_url.replace('_normal',''), hook='Twitter profile picture')
@@ -958,12 +994,7 @@ def dispatch():
 				output.echo(output.paginate(style='languages', current=('' if 'lang' not in request.params.keys() else request.params['lang']) , params={}, criterion='lang', options=list(languages)), hook='language-pagination')
 				
 		
-	elif request.called_method == 'dashboard':
-		if 'access_token' not in session.SESSION.data.keys():
-			output.echo('Location: '+request.exacthost+'/twitter/login', hook='http-headers', overwrite=True)
-			output.echo('Status: 302 Found', hook='http-headers')
-			output.include('null', 'root')
-		else:
+		elif request.called_method == 'dashboard':
 			count_metrics = DB.metrics.count({'id':me.id})
 			if count_metrics > 0:
 				output.include('twitter.dashboard', 'root', overwrite=True)
@@ -1306,43 +1337,9 @@ def dispatch():
 				
 			else:
 				output.include('twitter.metrics.wait', 'root', overwrite=True)
-		
-	elif request.called_method == 'callback':
-		if 'denied' in request.params:
-			del session.SESSION['request_token']
-			del session.SESSION['request_token_secret']
-			output.echo('Location: '+request.exacthost+'/twitter/login?reason=authorization_denied', hook='http-headers', overwrite=True)
-			output.include('null', 'root')
-		elif 'access_token' not in session.SESSION.data.keys():
-			access_credentials = get_access_token(consumer_key, consumer_secret)
-			session.SESSION['access_token'] = access_credentials[0]
-			session.SESSION['access_token_secret'] = access_credentials[1]
-			del session.SESSION['request_token']
-			del session.SESSION['request_token_secret']
-		output.echo('Location: '+request.exacthost+'/twitter/dashboard', hook='http-headers', overwrite=True)
-		output.include('null', 'root')
-		
-	elif request.called_method == 'login':
-		if 'login' in request.params.keys():
-			request_credentials = authorize(consumer_key, consumer_secret)
-			_url = request_credentials[0]
-			session.SESSION['request_token'] = request_credentials[1]
-			session.SESSION['request_token_secret'] = request_credentials[2]
-			output.echo('Location: '+_url, hook='http-headers', overwrite=True)
-			output.include('null', 'root', overwrite=True)
-		else:
-			output.include('twitter.login', 'root', overwrite=True)
-		
-	elif request.called_method == 'logout':
-		request_credentials = authorize(consumer_key, consumer_secret)
-		del session.SESSION['access_token']
-		del session.SESSION['access_token_secret']
-		del session.SESSION['current_user']
-		output.echo('Location: '+request.exacthost+'/twitter/login', hook='http-headers', overwrite=True)
-		output.include('null', 'root', overwrite=True)
 	
-	else:
-		raise request.PageNotFoundException('not found')
+		else:
+			raise request.PageNotFoundException('not found')
 
 
 
