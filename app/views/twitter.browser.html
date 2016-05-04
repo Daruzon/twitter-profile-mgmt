@@ -25,16 +25,43 @@
 	<link href="/static/css/icheck/flat/green.css" rel="stylesheet" />
 	<link href="/static/css/floatexamples.css" rel="stylesheet" type="text/css" />
 	<style>
-	a > i {transition:.3s all} a:hover > i {text-shadow:0 0 2px whitesmoke,0 0 2px whitesmoke;}
+	a > i {transition:.3s all} a:hover i {text-shadow:0 0 2px whitesmoke,0 0 2px whitesmoke;}
 	.profile_view {background-size:cover;background-position: center center;box-shadow: -3px -3px 20px #444 inset, 0 0 5px #333;border:5px white solid;overflow:hidden;border-radius:15px;}
 	.profile_view hr {box-shadow: 0 0 5px white;border:none;border-top:1px white solid;width:60%;margin:10px auto;clear:both;}
-	.profile_view.following [data-for=not-following], .profile_view.not-following [data-for=following] {display:none;}
+	.following .profile_view [data-for=not-following], .not-following .profile_view [data-for=following], .not-follower .profile_view [data-for=follower] {display:none!important;}
+	a:hover .on-not-hover {display:none;} a:not(:hover) .on-hover {display:none;}
+	.followers .not-follower, .non-followers .follower, .influencers .not-following, .not-influencers .following, [user-id]:not(.waiting) .on-wait, .waiting .on-not-wait {display:none;}
+	[user-id] .fa-spinner {color:white;}
+	.follow-widget, .followers-widget {margin:2px;}
+	.follow-widget {background:rgba(255,255,255,.3);border:rgba(200,200,200,.3) solid 1px;box-shadow:0 0 2px rgba(150,150,150,.4);display:inline-block;text-align:center;border-radius:3px;transition:.5s all;}
+	.not-following .follow-widget:hover {background:rgba(200,255,200,.5);border:rgba(140,200,140,.5) solid 1px;box-shadow:0 0 2px rgba(100,150,100,.5);}
+	.following .follow-widget:hover {background:rgba(255,200,200,.5);border:rgba(200,140,140,.5) solid 1px;box-shadow:0 0 2px rgba(150,100,100,.5);}
+	#selection {margin:auto;text-align:center;display:block;} .btn-group>.btn {float:none!important;}
 	</style>
 	<script src="/static/js/jquery.js"></script>
 	<script src="/static/js/jquery-ui.js"></script>
 	<script src="/static/js/nprogress.js"></script>
 	<script src="/static/js/highcharts.js"></script>
 	<script type="text/javascript">
+		function follow(id) {
+			$('[user-id='+id+']').addClass('waiting').find('.follow-widget').attr('disabled', 'disabled').css('opacity', '.5');
+			$.ajax({
+				url:'/twitter/follow',
+				data:{'id':id},
+			}).done(function(data){
+				$('[user-id='+id+']').removeClass('not-following').addClass('following').removeClass('waiting').find('.follow-widget').removeAttr('disabled').css('opacity', '1');
+			});
+		}
+		function unfollow(id) {
+			$('[user-id='+id+']').addClass('waiting').find('.follow-widget').attr('disabled', 'disabled').css('opacity', '.5');
+			$.ajax({
+				url:'/twitter/unfollow',
+				data:{'id':id},
+			}).done(function(data){
+				$('[user-id='+id+']').removeClass('following').addClass('not-following').removeClass('waiting').find('.follow-widget').removeAttr('disabled').css('opacity', '1');
+			});
+		}
+		
 		$(document).ready(function(){
 			_colors_ = Highcharts.getOptions().colors.sort(function() {return .5 - Math.random();})
 		    // Radialize the colors
@@ -286,13 +313,15 @@
 
 			<!-- page content -->
 			<div class="right_col" role="main">
-				<div class="row">
+				<div class="row" style="margin-top:60px;">
+					{{type-pagination}}
+					<div style="clear:both"></div>
 					{{number-pagination}}
 					<div style="clear:both"></div>
 					{{language-pagination}}
 				</div>
 				<div style="clear:both"></div>
-				<div class="row">
+				<div class="row {{directory-criteria}}">
 					{{user-entries}}
 				</div>
 
@@ -301,7 +330,7 @@
 					<div class="col-md-4 col-sm-4 col-xs-12">
 						<div class="x_panel">
 							<div class="x_title">
-								<h2>Recent Activities <small>Sessions</small></h2>
+								<h2>(template fragment)</h2>
 								<ul class="nav navbar-right panel_toolbox">
 									<li><a class="collapse-link"><i class="fa fa-chevron-up"></i></a>
 									</li>
@@ -387,7 +416,7 @@
 							<div class="col-md-12 col-sm-12 col-xs-12">
 								<div class="x_panel">
 									<div class="x_title">
-										<h2>Visitors location <small>geo-presentation</small></h2>
+										<h2>(template fragment)</h2>
 										<ul class="nav navbar-right panel_toolbox">
 											<li><a class="collapse-link"><i class="fa fa-chevron-up"></i></a>
 											</li>
