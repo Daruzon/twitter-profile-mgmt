@@ -43,7 +43,29 @@ def shorten(figure):
 		figure = round(figure, 2)
 	
 	return str(figure)+letter
+
+def get_colorcodes(num=6, rgb=True):
+	conversion = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F']
+	_colors_ = []
+	_c_ = list(colors.values())
+	for a in range(0, num):
+		color = random.choice( range(len(_c_)) )
+		color_code = ','.join([str(i) for i in _c_[color]])
+		del _c_[color]
+		if not len(_c_):
+			_c_.append([30, 30, 30])
+		
+		if not rgb:
+			_code_ = color_code.split(',')
+			for i in [0,1,2]:
+				_code_[i] = conversion[int(int(_code_[i])/16)] + conversion[int(_code_[i])%16]
+			
+			_colors_.append("#"+''.join(_code_))
+		
+		else:
+			_colors_.append("rgb("+color_code+")")
 	
+	return _colors_
 		
 def echo(string, hook='main', overwrite=False, fill={}):
 	if overwrite or (hook not in templates):
@@ -70,7 +92,7 @@ def get(template='null'):
 
 def render_headers():
 	if 'http-headers' in templates.keys():
-		print(templates['http-headers'])
+		print(templates['http-headers'], end='')
 		print("Generated-with: Custom headers")
 		
 	else:
@@ -81,30 +103,6 @@ def render_headers():
 		print("Content-Type: text/html;charset=utf-8")
 	print(str(session.SESSION.output()))
 	print()
-		
-
-def get_colorcodes(num=6, rgb=True):
-	conversion = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F']
-	_colors_ = []
-	_c_ = list(colors.values())
-	for a in range(0, num):
-		color = random.choice( range(len(_c_)) )
-		color_code = ','.join([str(i) for i in _c_[color]])
-		del _c_[color]
-		if not len(_c_):
-			_c_.append([30, 30, 30])
-		
-		if not rgb:
-			_code_ = color_code.split(',')
-			for i in [0,1,2]:
-				_code_[i] = conversion[int(int(_code_[i])/16)] + conversion[int(_code_[i])%16]
-			
-			_colors_.append("#"+''.join(_code_))
-		
-		else:
-			_colors_.append("rgb("+color_code+")")
-	
-	return _colors_
 
 def render_response():
 	done = []
@@ -127,9 +125,14 @@ def render_response():
 	
 	rendered = True
 	print(templates['root'])
+
+def send_json(_json_):
+	import json
+	echo('Content-Type: text/json', 'http-headers', overwrite=True)
+	echo(json.dumps(_json_), hook='root', overwrite=True)
 	
 def paginate(style='numbers', base='', current=1, params={}, criterion='page', last=1, options=[]):
-	if style not in ['numbers', 'languages']:
+	if style not in ['numbers', 'languages', 'types']:
 		style = 'numbers'
 	
 	if style == 'letters':
@@ -193,24 +196,23 @@ def paginate(style='numbers', base='', current=1, params={}, criterion='page', l
 		
 		"""
 	
+	elif style == 'types':
+		_ps_ = '<div id="selection" class="btn-group" data-toggle="buttons">'
+		_ps_ += ''.join(['<label class="btn btn-default'+('', ' active')[x==current]+'" data-toggle-class="btn-primary" data-toggle-passive-class="btn-default"><input type="radio" name="selection" value="'+x+'" data-url="'+y['url']+'"><span style="margin-right:5px;text-shadow:1px 1px 1px #222,1px 1px 1px #222;"><i class="fa fa-user" style="color:#BBC;"></i><sup style="margin-left:-4px;"><i class="fa fa-'+y['icon']+'" style="color:'+y['color']+';"></i></sup></span>'+y['title']+'</label>' for (x, y) in options.items()])
+		_ps_ += '</div>'
+		_ps_ += '<script type="text/javascript">$(document).ready(function(){$("#selection label").click(function(){window.location.href = $(this).find("input").attr("data-url");});});</script>'
+	
 	elif style == 'languages':
-		
-		
 		_ps_ = '<div style="text-align:center;clear:both;">'
-		
 		if len(current):
 			_ps_ +='<ul class="pagination pagination-sm langues" style="margin:5px;"><li><a href="?">Reset</a></li></ul>'
-		
 		_ps_ += '<ul class="pagination pagination-sm chiffres" style="margin:5px;">'
-		
 		for i in sorted(options):
 			r = params
 			r[criterion] = i
 			chain = base + '?' + '&'.join([x+'='+y for x,y in r.items()])
 			_ps_ += '<li'+('',' class="active"')[i == current]+'><a href="'+chain+'"><img src="/static/img/flags/lang/'+str(i)+'.png"/></a></li>'
-		
 		_ps_ += '</ul></div>'
-		
 		
 	elif style == 'numbers':
 		
