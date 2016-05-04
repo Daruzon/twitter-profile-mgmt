@@ -1,35 +1,45 @@
-<div class="btn-group" style="z-index:2000;">
-	<button class="btn btn-default btn-xs dropdown-toggle" style="padding:0 3px;" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-		Actions
-		<span class="caret"></span>
-		<span class="sr-only">Toggle Dropdown</span>
-	</button>
-	<ul class="dropdown-menu">
-		<li data-for="following">
-			<a href="/twitter/unfollow?when=now&id={{id-twittos}}" style="width:20px;display: inline-block;">
-				<span style="width:20px;display: inline-block;">
-					<i class="fa fa-remove" style="color:red!important;"></i>
-				</span>
-				<span>Unfollow now</span>
-			</a>
-		</li>
-		<li data-for="following">
-			<a href="/twitter/unfollow?when=later&id={{id-twittos}}" style="width:20px;display: inline-block;">
-				<span style="width:20px;display: inline-block;">
-					<i class="fa fa-remove" style="color:red!important;"></i><sup style="margin-left:-2px;"><i class="fa fa-clock-o" style="color:#333;"></i></sup>
-				</span>
-				<span>Unfollow later</span>
-			</a>
-		</li>
-		<li data-for="not-following">
-			<a href="/twitter/unfollow?when=now&id={{id-twittos}}">
-				<span>Follow now</span>
-			</a>
-		</li>
-		<li data-for="not-following">
-			<a href="/twitter/unfollow?when=later&id={{id-twittos}}">
-				<span>Follow later</span>
-			</a>
-		</li>
-	</ul>
-</div>
+<span class="follow-widget"
+	style="width:120px;">
+	<span data-for="following">
+		<a href="/twitter/unfollow?when=now&id={{id-twittos}}"
+			onclick="unfollow($(this).closest('.following').attr('user-id')); return false;" style="width:100%;display:inline-block;color:white;text-decoration: none!important;">
+			<span class="on-not-wait">
+				<i class="fa fa-user" style="color:#DDD;"></i>
+				<sup style="margin-left:-8px;">
+					<i class="fa fa-check on-not-hover" style="color:rgb(110,180,110)!important;"></i>
+					<i class="fa fa-remove on-hover" style="color:red!important;"></i>
+				</sup>
+			</span>
+			<span class="on-wait fa fa-spin fa-spinner"></span>
+			<span class="on-not-wait on-not-hover">Following</span>
+			<span class="on-not-wait on-hover">Unfollow</span>
+		</a>
+	</span>
+	<span data-for="not-following" style="width:100%;">
+		<a href="/twitter/follow?when=now&id={{id-twittos}}"
+			onclick="follow($(this).closest('.not-following').attr('user-id')); return false;"style="width:100%;display:inline-block;color:white;text-decoration: none!important;">
+			<span class="on-not-wait">
+				<i class="fa fa-user" style="color:#DDD;"></i>
+				<sup style="margin-left:-8px;">
+					<i class="fa fa-remove on-not-hover" style="color:transparent!important;"></i>
+					<i class="fa fa-plus on-hover" style="color:rgb(110,180,110)!important;"></i>
+				</sup>
+			</span>
+			<span class="on-wait fa fa-spin fa-spinner"></span>
+			<span class="on-not-wait on-not-hover">Not following</span>
+			<span class="on-not-wait on-hover">Follow</span>
+		</a>
+	</span>
+</span>
+<span class="followers-widget" data-for="follower"
+	style="width:120px;background:rgba(255,255,255,.3);border:rgba(200,200,200,.3) solid 1px;box-shadow:0 0 2px rgba(150,150,150,.4);display:inline-block;text-align:center;border-radius:3px;">
+	<span>
+		<span>
+			<i class="fa fa-user" style="color:#DDD;"></i>
+			<sup style="margin-left:-8px;">
+				<i class="fa fa-check" style="color:rgb(110,180,110)!important;"></i>
+			</sup>
+		</span>
+		<span>Follower</span>
+	</span>
+</span>
