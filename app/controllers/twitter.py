@@ -26,6 +26,7 @@ signup = False
 me = None
 auth = None
 TwitterAPI = None
+whatswrong = ''
 
 from requests_oauthlib import OAuth1Session
 
@@ -396,7 +397,7 @@ class user:
 		search = requests.get(u, allow_redirects=False)
 		
 		if 'location' not in search.headers.keys():
-			return None
+			return ''
 		
 		return r.headers['location']
 				
@@ -425,29 +426,26 @@ class user:
 			willUnfollow = True
 	
 	
-	def unfollow(self):
-		updates = {
-			'$set':{'unfollowing_since':datetime.now(), 'following':False},
-			'$unset':{'following_since':1}
-		}
-		"""
-		db::get("twitter")->users->update(['id'=>$user_id], $updates);
-	
-		$requete = ['user_id'=>$user_id];
-		$user = (array)$cb->friendships_destroy($requete);
-		$desabonnements++;
-		$unfollowed[] = "@".$user_infos['screen_name'];
-		//echo "\r[".date("H:i:s")."] [Désabonnement] [".$user_infos['screen_name']."] Encore $remaining requêtes.		  ";
-		if($desabonnements >= $counter_unfollow)
-			break;
-		"""
+	def follow(self, id=None):
+		if id == None:
+			return False
+		TwitterAPI.create_friendship(id=id, follow=True)
+		DB.users.update({'id':me.id}, {'$addToSet':{'details.influencers':str(id), 'details.risingstars.'+str(id): time.time()}, '$inc':{'friends_count':1}})
 		return True
+	
+		
+	def unfollow(self, id=None):
+		if id == None:
+			return False
+		TwitterAPI.destroy_friendship(id=id, follow=True)
+		DB.users.update({'id':me.id}, {'$pull':{'details.influencers':str(id)},'$addToSet':{'details.nongrata.'+str(id): time.time()}, '$inc':{'friends_count':-1}})
+		return True
+	
 		
 	def whitelist(self):
 		updates = {'$set':{'to_keep':True}}
 		#db::get("twitter")->users->update(['id'=>$user_id], $updates);
 		return False
-	
 	
 	
 	def unfollowBack(self, count=5):
@@ -468,7 +466,6 @@ class user:
 				
 					count -= 1
 	
-	
 	def shouldFollow():
 		ratio_following = self.getFollowRatio()
 		ratio_tweeting = self.getTweetRatio()
@@ -485,25 +482,6 @@ class user:
 				trouve = True
 		
 		return trouve
-	
-	
-		
-	def follow(self):
-		# On fait la mise à jour MongoDB
-		DB.users.update(
-			{'id':self.id },
-			{'$set':{'following':True,'following_since':datetime.now()}, '$currentDate': {'last_update': True}
-		})
-		
-		# On fait la requête à Twitter
-		requete = {'user_id':self.id, 'follow':true};
-		
-		if self.id in followed_users:
-			requete['to_keep'] = True
-		
-		#user = self.friendships_create(requete)
-		followed.append("@".self.screen_name);
-		return self
 	
 	def blacklist(self):
 		print("hello world")
@@ -787,7 +765,7 @@ def updateaccounts():
 		else:
 			DB.users.update({'id':a_user['id']}, {'$currentDate': {'last_update': True}, '$set':{'links.wikipedia':[]}})
 	
-	to_document = DB.users.find({'links.linkedin':{'$exists':False}}).sort('followers_count',mongo.DESC)[0:10]
+	to_document = DB.users.find({'links.linkedin':{'$exists':True}}).sort('followers_count',mongo.DESC)[0:10]
 	for a_user in to_document:
 		u = user(a_user['id'])
 		linkedin = u.getLinkedInURL()
@@ -795,9 +773,10 @@ def updateaccounts():
 		if len(linkedin):
 			DB.users.update({'id':a_user['id']}, {'$currentDate': {'last_update': True}, '$set':{'links.linkedin':linkedin}})
 		else:
-			DB.users.update({'id':a_user['id']}, {'$currentDate': {'last_update': True}, '$set':{'links.linkedin':[]}})
+			DB.users.update({'id':a_user['id']}, {'$currentDate': {'last_update': True}, '$set':{'links.linkedin':''}})
 	
-	
+
+# Vérifier toutes les 5 minutes les nouveaux abonnements et désabonnements. Tenir à jour une version actualisée dans la fiche utilisateur de chaque compte.
 def monitor_realtime_behaviors():
 	
 	clients = DB.accounts.find()
@@ -840,6 +819,7 @@ def monitor_realtime_behaviors():
 			}
 			for k in news:
 				for id in news[k]:
+					u = user(id=id)
 					if str(id) in comparaison[mapping[k]]:
 						comparaison[mapping[k]][str(id)].append(time.time())
 					else:
@@ -899,6 +879,7 @@ def scan_descriptions():
 
 def dispatch():
 	
+	# If anonymous
 	if 'access_token' not in session.SESSION.data.keys():
 		if request.called_method == 'callback':
 			if 'denied' in request.params:
@@ -906,6 +887,8 @@ def dispatch():
 				del session.SESSION['request_token_secret']
 				output.echo('Location: '+request.exacthost+'/twitter/login?reason=authorization_denied', hook='http-headers', overwrite=True)
 				output.include('null', 'root')
+				
+			# If access has been granted, through Twitter auth
 			else:
 				access_credentials = get_access_token(consumer_key, consumer_secret)
 				session.SESSION['access_token'] = access_credentials[0]
@@ -925,13 +908,30 @@ def dispatch():
 				output.include('null', 'root', overwrite=True)
 			else:
 				output.include('twitter.login', 'root', overwrite=True)
-		
 		else:
 			output.echo('Location: '+request.exacthost+'/twitter/login', hook='http-headers', overwrite=True)
 			output.echo('Status: 302 Found', hook='http-headers')
 			output.include('null', 'root')
+	
+	#If logged in
 	else:
-		if request.called_method == 'logout':
+		output.echo(me.name, hook='User Name')
+		output.echo(me.profile_image_url.replace('_normal',''), hook='Twitter profile picture')
+				
+		# If logging out
+		if request.called_method == 'follow':
+			result = {'error':str(int(not me.follow(id=request.params['id'])))}
+			print(result)
+			output.send_json(result)
+		
+		# If unfollowing
+		elif request.called_method == 'unfollow':
+			result = {'error':str(int(not me.unfollow(id=request.params['id'])))}
+			print(result)
+			output.send_json(result)
+		
+		# If logging out
+		elif request.called_method == 'logout':
 			request_credentials = authorize(consumer_key, consumer_secret)
 			del session.SESSION['access_token']
 			del session.SESSION['access_token_secret']
@@ -939,67 +939,130 @@ def dispatch():
 			output.echo('Location: '+request.exacthost+'/twitter/login', hook='http-headers', overwrite=True)
 			output.include('null', 'root', overwrite=True)
 		
+		# If browsing user directories
 		elif request.called_method == 'network':
-			output.include('twitter.browser', 'root', overwrite=True)
-			output.echo(me.name, hook='User Name')
-			output.echo(me.profile_image_url.replace('_normal',''), hook='Twitter profile picture')
-			if 'details' in me.data.keys() and 'influencers' in me.data['details'].keys():
-				languages = list(set([x[0:2] for x in DB.users.distinct('lang', {'id':{'$in':me.details['influencers']}})]))
-				req = {'id':{'$in':me.details['influencers']}}
-				if 'lang' in request.params.keys() and request.params['lang'] in languages:
-					req['lang'] = request.params['lang']
+			if request.called_submethod == '':
+				output.echo('Location: '+request.exacthost+'/twitter/login', hook='http-headers', overwrite=True)
+				output.echo('Status: 302 Found', hook='http-headers')
+				output.include('null', 'root')
+			else:
+			
+				# Map different browsing options
+				options = OrderedDict([
+					('influencers'	,	{'title':'Influencers', 'icon':'star', 'color':'#EE3', 'url':request.exacthost+'/twitter/network/influencers'}),
+					('followers'	,	{'title':'Followers', 'icon':'rss', 'color':'#F83', 'url':request.exacthost+'/twitter/network/followers'}),
+					('newcomers'	,	{'title':'Newcomers', 'icon':'plus', 'color':'#6C6', 'url':request.exacthost+'/twitter/network/newcomers'}),
+					('quitters'		,	{'title':'Unfollowers', 'icon':'remove', 'color':'#C66', 'url':request.exacthost+'/twitter/network/quitters'}),
+					('mutual'		,	{'title':'Mutual', 'icon':'exchange', 'color':'#37C', 'url':request.exacthost+'/twitter/network/mutual'}),
+					('baiters'		,	{'title':'Baiters', 'icon':'anchor', 'color':'#001', 'url':request.exacthost+'/twitter/network/baiters'})
+				])
 				
-				users = DB.users.find(req).sort('sortable_username', mongo.ASC)
-				_count_ = users.count()
-				_pages_ = int(_count_ / 100) + int(bool(_count_ % 100))
-				current_page = min(1 if 'page' not in request.params.keys() else int(request.params['page']), _pages_)
-				users = users[(current_page-1)*100:(current_page*100)]
+				# Decide which one must be loaded
+				if request.called_submethod != None and request.called_submethod in options.keys():
+					current_selection = request.called_submethod
+				else:
+					current_selection = 'influencers'
 				
-				for u in users:
-					u = user(id=u['id'], data=u)
-					entry = {
-						'username'				:	u.name,
-						'screen_name'			:	u.screen_name,
-						'image'					:	u.profile_image_url.replace('_normal',''),
-						'description'			:	u.description,
-						'language'				:	u.lang,
-						'nb_tweets'				:	output.shorten(u.statuses_count),
-						'nb_influencers'		:	output.shorten(u.friends_count),
-						'nb_followers'			:	output.shorten(u.followers_count),
-						'relationship-status'	:	' '.join([
-														('not-following', 'following')[u.id in me.details['influencers']],
-														('not-follower', 'follower')[u.id in me.details['followers']],
-														('not-newcomer', 'newcomer')[str(u.id) in me.details['newcomers'].keys() and me.details['newcomers'][str(u.id)].pop() > time.time() - 86400],
-														('not-quitter', 'quitter')[str(u.id) in me.details['newcomers'].keys()],
-													]),
-						'external-links'		:	'',
-						'current-relationships'	:	''
-					}
-					if 'links' in u.data.keys():
-						if 'wikipedia' in u.links.keys() and len(u.links['wikipedia']):
-							found = False
-							for lg in list(set([u.lang, 'en', 'fr'])):
-								if lg in u.links['wikipedia'].keys():
-									entry['external-links'] += '<a style="color:white;" target="_blank" href="'+u.links['wikipedia'][lg]['url']+'"><i class="fa fa-wikipedia-w"></i></a>'
-									found = True
-									break
-							if not found:
-								entry['external-links'] += '<a style="color:white;" target="_blank" href="'+(u.links['wikipedia'].popitem()[1]['url'])+'"><i class="fa fa-wikipedia-w"></i></a>'
-					output.include('twitter.block.userentry', hook='user-entries', fill=entry)
+				typetoggle = output.paginate(style='types', current=current_selection, params=request.params, options=options)
 				
-				#output.echo(, hook='current-relationships')
-				output.include('twitter.block.actionbutton', hook='buttons', fill={'id-twittos':u.id})
+				# Load the main directory template
+				output.include('twitter.browser', 'root', overwrite=True, fill={'directory-criteria':current_selection, 'type-pagination':typetoggle})
 				
-				output.echo(output.paginate(style='numbers', current=current_page, params=request.params, criterion='page', last=_pages_), hook='number-pagination')
-				output.echo(output.paginate(style='languages', current=('' if 'lang' not in request.params.keys() else request.params['lang']) , params={}, criterion='lang', options=list(languages)), hook='language-pagination')
+				# And if we have the data, fetch it.
+				if ('details' in me.data.keys() and current_selection in me.data['details'].keys()) or (current_selection in ['mutual', 'baiters']):
+					
+					
+					# Obtain global user list
+					if current_selection in ['influencers', 'followers']:
+						current_list = me.data['details'][current_selection]
+					elif current_selection == 'mutual':
+						if 'followers' not in me.data['details'].keys() or 'influencers' not in me.data['details'].keys():
+							current_list = []
+						else:
+							current_list = [x for x in me.data['details']['followers'] if x in me.data['details']['influencers']]
+					elif current_selection == 'baiters':
+						if 'risingstars' not in me.data['details'].keys() or 'quitters' not in me.data['details'].keys():
+							current_list = []
+						else:
+							current_list = [x for (x, y) in me.data['details']['risingstars'].items() if (x in me.data['details']['quitters'].keys())]
+					else:
+						current_list = [int(x) for x in me.data['details'][current_selection].keys()]
+					
+					req = {'id':{'$in':current_list}}
+					
+					# Obtain global relevant language list
+					languages = list(set([x[0:2] for x in DB.users.distinct('lang', req)]))
+					if 'lang' in request.params.keys() and request.params['lang'] in languages:
+						req['lang'] = request.params['lang']
+					
+					# Fetch a relevant user slice
+					users = DB.users.find(req).sort('sortable_username', mongo.ASC)
+					_count_ = users.count()
+					if _count_:
+						_pages_ = int(_count_ / 100) + int(bool(_count_ % 100))
+						current_page = min(1 if 'page' not in request.params.keys() else int(request.params['page']), _pages_)
+						users = users[(current_page-1)*100:(current_page*100)]
+						
+						output.echo('<p style="font-size:13px;margin:4px;text-align:right;"><em>Results '+str(((current_page-1)*100)+1)+'-'+str(min(current_page*100, _count_))+' of '+str(_count_)+'</em></p><hr/>', hook='user-entries')
+						
+						# Iterate through the user directory slice
+						for u in users:
+							u = user(id=u['id'], data=u)
+							entry = {
+								'id'					:	u.id,
+								'username'				:	u.name,
+								'screen_name'			:	u.screen_name,
+								'image'					:	u.profile_image_url.replace('_normal',''),
+								'description'			:	u.description,
+								'language'				:	u.lang,
+								'nb_tweets'				:	output.shorten(u.statuses_count),
+								'nb_influencers'		:	output.shorten(u.friends_count),
+								'nb_followers'			:	output.shorten(u.followers_count),
+								'relationship-status'	:	' '.join([
+																('not-following', 'following')[u.id in me.details['influencers']],
+																('not-follower', 'follower')[u.id in me.details['followers']],
+																('not-newcomer', 'newcomer')[str(u.id) in me.details['newcomers'].keys() and me.details['newcomers'][str(u.id)].pop() > time.time() - 86400],
+																('not-quitter', 'quitter')[str(u.id) in me.details['newcomers'].keys()],
+															]),
+								'external-links'		:	'',
+								'current-relationships'	:	''
+							}
+							if 'links' in u.data.keys():
+								if 'wikipedia' in u.links.keys() and len(u.links['wikipedia']):
+									found = False
+									for lg in list(set([u.lang, 'en', 'fr'])):
+										if lg in u.links['wikipedia'].keys():
+											entry['external-links'] += '<a style="color:white;" target="_blank" href="'+u.links['wikipedia'][lg]['url']+'"><i class="fa fa-wikipedia-w"></i></a>'
+											found = True
+											break
+									if not found:
+										entry['external-links'] += '<a style="color:white;" target="_blank" href="'+(u.links['wikipedia'].popitem()[1]['url'])+'"><i class="fa fa-wikipedia-w"></i></a>'
+								if 'linkedin' in u.links.keys() and len(u.links['linkedin']):
+									entry['external-links'] += '<a style="color:white;" target="_blank" href="'+u.links['linkedin']+'"><i class="fa fa-linkedin"></i></a>'
+							
+							output.include('twitter.block.userentry', hook='user-entries', fill=entry)
+						
+							#output.echo(, hook='current-relationships')
+						output.include('twitter.block.actionbutton', hook='buttons', fill={'id-twittos':u.id})
+					
+						output.echo(output.paginate(style='numbers', current=current_page, params=request.params, criterion='page', last=_pages_), hook='number-pagination')
+						output.echo(output.paginate(style='languages', current=('' if 'lang' not in request.params.keys() else request.params['lang']) , params={}, criterion='lang', options=list(languages)), hook='language-pagination')
+					
+					else:
+						output.echo('<p style="font-size:20px;margin:20px auto;text-align:center;"><strong>No result</strong></p>', hook='user-entries')
+						output.echo('', hook='number-pagination')
+						output.echo('', hook='language-pagination')
 				
+				# If we don't...
+				else:
+					pass
+			
 		
+		# If browsing reporting views
 		elif request.called_method == 'dashboard':
 			count_metrics = DB.metrics.count({'id':me.id})
 			if count_metrics > 0:
 				output.include('twitter.dashboard', 'root', overwrite=True)
-				output.echo(me.name, hook='User Name')
-				output.echo(me.profile_image_url.replace('_normal',''), hook='Twitter profile picture')
 				today = DB.metrics.find({'id':me.id}).sort('day', mongo.DESC)[0]
 				today_map = OrderedDict()
 				
